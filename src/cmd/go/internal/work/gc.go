@@ -20,6 +20,7 @@ import (
 	"cmd/go/internal/cfg"
 	"cmd/go/internal/load"
 	"cmd/go/internal/str"
+	"cmd/internal/objabi"
 	"crypto/sha1"
 )
 
@@ -147,11 +148,6 @@ func gcBackendConcurrency(gcflags []string) int {
 		log.Fatalf("GO19CONCURRENTCOMPILATION must be 0, 1, or unset, got %q", e)
 	}
 
-	if os.Getenv("GOEXPERIMENT") != "" {
-		// Concurrent compilation is presumed incompatible with GOEXPERIMENTs.
-		canDashC = false
-	}
-
 CheckFlags:
 	for _, flag := range gcflags {
 		// Concurrent compilation is presumed incompatible with any gcflags,
@@ -164,6 +160,11 @@ CheckFlags:
 			canDashC = false
 			break CheckFlags
 		}
+	}
+
+	// TODO: Test and delete these conditions.
+	if objabi.Fieldtrack_enabled != 0 || objabi.Preemptibleloops_enabled != 0 || objabi.Clobberdead_enabled != 0 {
+		canDashC = false
 	}
 
 	if !canDashC {
@@ -221,6 +222,12 @@ func (gcToolchain) asm(b *Builder, a *Action, sfiles []string) ([]string, error)
 			}
 		}
 	}
+
+	if cfg.Goarch == "mips" || cfg.Goarch == "mipsle" {
+		// Define GOMIPS_value from cfg.GOMIPS.
+		args = append(args, "-D", "GOMIPS_"+cfg.GOMIPS)
+	}
+
 	var ofiles []string
 	for _, sfile := range sfiles {
 		ofile := a.Objdir + sfile[:len(sfile)-len(".s")] + ".o"
